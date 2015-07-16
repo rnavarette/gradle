@@ -16,6 +16,7 @@
 
 package org.gradle.api.internal;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.SetMultimap;
 import groovy.lang.Closure;
@@ -30,6 +31,7 @@ import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.internal.reflect.*;
 
 import javax.inject.Inject;
+import java.lang.NoSuchMethodException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -206,6 +208,14 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         return subclass;
     }
 
+    private <T> Method methodForType(Method method, Class<T> type) {
+        try {
+            return type.getMethod(method.getName(), method.getParameterTypes());
+        } catch (NoSuchMethodException e) {
+            return method;
+        }
+    }
+
     protected abstract <T> ClassBuilder<T> start(Class<T> type, ClassMetaData classMetaData);
 
     private ClassMetaData inspectType(Class<?> type) {
@@ -270,8 +280,9 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         }
         for (PropertyDetails property : classDetails.getProperties()) {
             PropertyMetaData propertyMetaData = classMetaData.property(property.getName());
+            System.out.println("Adding property: "+ property.getName());
             for (Method method : property.getGetters()) {
-                propertyMetaData.addGetter(method);
+                propertyMetaData.addGetter(method, type);
             }
             for (Method method : property.getSetters()) {
                 propertyMetaData.addSetter(method);
@@ -381,8 +392,9 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
             return setters.get(0).getParameterTypes()[0];
         }
 
-        public void addGetter(Method method) {
-            if (getters.add(method) && method.getAnnotation(Inject.class) != null) {
+        public void addGetter(Method method, Class type) {
+            Method actual = methodForType(method, type);
+            if (getters.add(method) && actual.getAnnotation(Inject.class) != null) {
                 injector = true;
             }
         }
@@ -393,6 +405,24 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
 
         public void addSetMethod(Method method) {
             setMethods.add(method);
+        }
+
+        public Optional<Method> injectorGetterForType(Class<?> type) {
+            for (Method getter : this.getters) {
+                Method method = methodForType(getter, type);
+                if (method.getAnnotation(Inject.class) != null) {
+                    return Optional.of(method);
+                }
+            }
+            return Optional.absent();
+        }
+
+        private <T> Method methodForType(Method method, Class<T> type) {
+            try {
+                return type.getMethod(method.getName(), method.getParameterTypes());
+            } catch (NoSuchMethodException e) {
+                return method;
+            }
         }
     }
 

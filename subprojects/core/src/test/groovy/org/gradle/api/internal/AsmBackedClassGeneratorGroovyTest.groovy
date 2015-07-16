@@ -18,11 +18,18 @@ package org.gradle.api.internal
 
 import org.gradle.api.Action
 import org.gradle.api.NonExtensible
+import org.gradle.api.Task
+import org.gradle.api.internal.project.ProjectInternal
+import org.gradle.api.internal.project.taskfactory.ITaskFactory
+import org.gradle.api.internal.project.taskfactory.TaskFactory
+import org.gradle.api.internal.tasks.DefaultTaskInputs
+import org.gradle.api.internal.tasks.DefaultTaskOutputs
 import org.gradle.api.plugins.ExtensionAware
 import org.gradle.internal.reflect.DirectInstantiator
 import org.gradle.internal.service.ServiceRegistry
 import org.gradle.internal.typeconversion.TypeConversionException
 import org.gradle.util.ConfigureUtil
+import org.gradle.util.TestUtil
 import spock.lang.Issue
 import spock.lang.Specification
 
@@ -354,10 +361,33 @@ class AsmBackedClassGeneratorGroovyTest extends Specification {
         then:
         0 * services._
     }
+
+    def "can inject service using a service getter method in a superclass"() {
+        given:
+        ProjectInternal project = TestUtil.createRootProject()
+
+        when:
+        final ITaskFactory taskFactory = new TaskFactory(generator).createChild(project, instantiator)
+        AndroidJarTask obj = taskFactory.create("droidTask", AndroidJarTask)
+
+        then:
+        true
+        obj.inputs.class == DefaultTaskInputs
+        obj.getInputs().class == DefaultTaskInputs
+        obj.getProperty("inputs").class == DefaultTaskInputs
+        obj.outputs.class == DefaultTaskOutputs
+        obj.getOutputs().class == DefaultTaskOutputs
+        obj.getProperty("outputs").class == DefaultTaskOutputs
+    }
 }
 
 enum TestEnum {
     ABC, DEF
+}
+
+public interface BinaryFileProviderTask extends Task {
+}
+class AndroidJarTask extends org.gradle.jvm.tasks.Jar {//implements BinaryFileProviderTask {
 }
 
 class EnumCoerceTestSubject {
