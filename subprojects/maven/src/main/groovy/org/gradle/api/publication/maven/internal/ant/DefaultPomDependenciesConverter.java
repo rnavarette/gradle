@@ -24,6 +24,7 @@ import org.gradle.api.artifacts.maven.Conf2ScopeMappingContainer;
 import org.gradle.api.publication.maven.internal.ExcludeRuleConverter;
 import org.gradle.api.publication.maven.internal.PomDependenciesConverter;
 import org.gradle.api.publication.maven.internal.VersionRangeMapper;
+import org.gradle.api.specs.Spec;
 
 import java.util.*;
 
@@ -118,16 +119,36 @@ public class DefaultPomDependenciesConverter implements PomDependenciesConverter
         Dependency mavenDependency =  new Dependency();
         mavenDependency.setGroupId(dependency.getGroup());
         if (dependency instanceof ProjectDependency) {
-            mavenDependency.setArtifactId(determineProjectDependencyArtifactId((ProjectDependency) dependency));
+            ProjectDependency projectDependency = (ProjectDependency) dependency;
+            mavenDependency.setArtifactId(determineProjectDependencyArtifactId(projectDependency));
+            final String artifactId = determineProjectDependencyArtifactId((ProjectDependency) dependency);
+            PublishArtifactSet configurationArtifacts = projectDependency.getProjectConfiguration().getArtifacts();
+            if (configurationArtifacts.size() > 0) {
+                Object[] matchingArtifacts = configurationArtifacts.matching(new Spec<PublishArtifact>() {
+                    public boolean isSatisfiedBy(PublishArtifact element) {
+                        return element.getName().equals(artifactId);
+                    }
+                }).toArray();
+
+                PublishArtifact artifactToPublish;
+                if (matchingArtifacts.length > 0) {
+                    artifactToPublish = (PublishArtifact) matchingArtifacts[0];
+                    if (artifactToPublish.getClassifier() != null) {
+                        classifier = artifactToPublish.getClassifier();
+                    }
+                }
+            }
         } else {
             mavenDependency.setArtifactId(name);
         }
+
         mavenDependency.setVersion(mapToMavenSyntax(dependency.getVersion()));
         mavenDependency.setType(type);
         mavenDependency.setScope(scope);
         mavenDependency.setOptional(false);
         mavenDependency.setClassifier(classifier);
         mavenDependency.setExclusions(getExclusions(dependency, configurations));
+
         return mavenDependency;
     }
 
